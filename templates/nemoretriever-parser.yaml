@@ -39,6 +39,7 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end }}
+            {{- if .Values.nvidiaApiKey }}
             - name: NVIDIA_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -49,6 +50,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "insurguard.nvidiaSecretName" . }}
                   key: NGC_API_KEY
+            {{- end }}
           ports:
             - containerPort: {{ .Values.nemoretrieverParser.port }}
               name: http

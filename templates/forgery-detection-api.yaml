@@ -34,11 +34,13 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end }}
+            {{- if .Values.nvidiaApiKey }}
             - name: NVIDIA_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "insurguard.nvidiaSecretName" . }}
                   key: NVIDIA_API_KEY
+            {{- end }}
             - name: HF_HOME
               value: /tmp/hf_cache
             - name: TRANSFORMERS_CACHE

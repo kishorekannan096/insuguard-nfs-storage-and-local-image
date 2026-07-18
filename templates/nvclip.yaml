@@ -32,11 +32,13 @@ spec:
           securityContext:
             {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
           env:
+            {{- if .Values.nvidiaApiKey }}
             - name: NGC_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "insurguard.nvidiaSecretName" . }}
                   key: NGC_API_KEY
+            {{- end }}
           ports:
             - containerPort: {{ .Values.nvclip.port }}
               name: http
