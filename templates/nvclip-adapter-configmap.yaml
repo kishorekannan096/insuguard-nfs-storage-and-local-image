@@ -1,0 +1,11 @@
+{{- if and .Values.nvclip.enabled .Values.nvclip.airgappedTritonMode }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "insurguard.fullname" . }}-nvclip-adapter
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+data:
+  adapter.py: |
+{{ .Files.Get "files/nvclip-adapter/adapter.py" | indent 4 }}
+{{- end }}

@@ -40,6 +40,10 @@ nimCache:
 # this is tracked separately. Same rationale as nimCache: empty
 # storageClassName falls back to local `storageClass`; point it at NFS with
 # -f values-storage-nfs.yaml so the cache survives helm uninstall.
+# Both Deployments also set HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1
+# unconditionally, so a cache miss fails loudly instead of silently reaching
+# huggingface.co — make sure the cache is actually warm (first run with
+# network access, or pre-seeded) before relying on this in an air-gapped env.
 hfCache:
   storageClassName: ""
   forgeryDetectionApi: 15Gi
@@ -242,10 +246,12 @@ nemotronVlm:
 # Unlike llamaParser/nemotronVlm, this NIM's image unconditionally constructs
 # an NGCClient (which authenticates in its own __init__) as part of startup's
 # download_models() call — confirmed empirically that this happens BEFORE any
-# cache check or NIM_MODEL_PROFILE logic runs, so nvidiaApiKey is a hard
-# requirement here regardless of a warm NFS cache. The chart fails fast with
-# a clear error (see templates/nvclip.yaml) if nvidiaApiKey is unset while
-# nvclip.enabled is true, rather than a confusing crash loop.
+# cache check or NIM_MODEL_PROFILE logic runs, so the NIM-wrapper path always
+# needs nvidiaApiKey regardless of a warm NFS cache. Because of that,
+# airgappedTritonMode below defaults to true — see its comment for the
+# trade-off it makes instead. The chart fails fast with a clear error (see
+# templates/nvclip.yaml) if you flip airgappedTritonMode back to false
+# without setting nvidiaApiKey, rather than a confusing crash loop.
 nvclip:
   enabled: true
   # In-cluster mirror. Original was tagged :latest — pinned to an immutable
@@ -255,24 +261,48 @@ nvclip:
   port: 8000
   servicePort: 8005
   shmSize: "8Gi"
-  # Left wired but confirmed ineffective for nvclip specifically (see note
+  # Only used when airgappedTritonMode is false (NIM-wrapper path). Left
+  # wired but confirmed ineffective for nvclip specifically (see note
   # above) — harmless to leave set in case a future image build respects it.
   modelProfile: "afd81bb5-1b82-4816-a1bd-312dd380e4d1"
   gpu: 1
   # ---------------------------------------------------------------------------
-  # OPT-IN true-air-gapped mode: skips the NIM Python wrapper (start_server)
+  # DEFAULT true-air-gapped mode: skips the NIM Python wrapper (start_server)
   # entirely and launches tritonserver directly against the already-cached
-  # Triton model repository on NFS — genuinely never touches NGC, unlike
-  # NIM_MODEL_PROFILE above. Trade-off: this also removes whatever HTTP API
-  # the NIM wrapper provided on top of raw Triton (base64 image handling,
-  # simplified request/response shape) — claims-backend calls nvclip via
-  # NVCLIP_URL and almost certainly expects that wrapper API, not Triton's
-  # native /v2/models/<name>/infer protocol. Untested against claims-backend;
-  # verify its actual image-matching flow still works before relying on this.
+  # Triton model repository on NFS — genuinely never touches NGC. A small
+  # adapter sidecar (see templates/nvclip-adapter-configmap.yaml and
+  # files/nvclip-adapter/adapter.py — same nvclip.image, no extra pull)
+  # re-exposes the NIM wrapper's /v1/embeddings HTTP API (base64 image in,
+  # embedding out) on top of Triton's native protocol, so claims-backend's
+  # NVCLIP_URL calls keep working without code changes.
+  #
+  # VERIFY BEFORE PRODUCTION: the adapter's image preprocessing (resize/
+  # normalization constants) and output handling (L2-normalize) are the
+  # standard OpenCLIP ViT-H-14 conventions, not read from anywhere
+  # nvclip-specific — they're my best-effort default, not confirmed against
+  # this exact model export. Tensor names/shapes/dtypes ARE read live from
+  # Triton's own metadata endpoint, not guessed. Run
+  # ./discover-airgap-info.sh's nvclip section (dumps the real config.pbtxt
+  # and, if you have a NIM-wrapper instance to compare against, a side-by-
+  # side embedding diff) before trusting this for real fraud-detection
+  # decisions. Set airgappedTritonMode: false + nvidiaApiKey to fall back to
+  # the original (NGC-dependent) NIM-wrapper path if verification fails.
+  #
   # tritonModelRepositoryPath is specific to the currently-cached profile
   # (see modelProfile comment above) — re-check if the image tag changes.
-  airgappedTritonMode: false
+  airgappedTritonMode: true
   tritonModelRepositoryPath: "/opt/nim/.cache/triton-model-repository/nvclip-vit-h-14_vgenericx1_0.0.3"
+  # Cluster-internal-only port tritonserver listens on in airgappedTritonMode
+  # (the adapter proxies to it; nothing else should reach it directly).
+  tritonInternalPort: 8010
+  adapter:
+    # Both empty by default = auto-discovered from Triton's live model
+    # metadata (see files/nvclip-adapter/adapter.py) rather than hardcoded.
+    # Only set these if auto-discovery picks the wrong model in a multi-
+    # model repository, or you need to force a resolution auto-discovery
+    # gets wrong for a dynamic (-1) shape dimension.
+    modelName: ""
+    imageSize: ""
 
 # 10. Claims Backend 
 claimsBackend:

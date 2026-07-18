@@ -35,6 +35,12 @@ spec:
             {{- end }}
             - name: HF_HOME
               value: /tmp/hf_cache
+            # See forgery-detection-api.yaml — without these, a cache miss
+            # (or the HF library's own metadata check) reaches huggingface.co.
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: TRANSFORMERS_OFFLINE
+              value: "1"
             - name: PYTORCH_CUDA_ALLOC_CONF
               value: "max_split_size_mb:128"
           ports:

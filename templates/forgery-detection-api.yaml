@@ -45,6 +45,13 @@ spec:
               value: /tmp/hf_cache
             - name: TRANSFORMERS_CACHE
               value: /tmp/hf_cache
+            # Forces the HF client to use only what's already in HF_HOME and
+            # never reach huggingface.co — without this, a cache miss (or
+            # the library's own version/metadata check) hits the network.
+            - name: HF_HUB_OFFLINE
+              value: "1"
+            - name: TRANSFORMERS_OFFLINE
+              value: "1"
             - name: HOME
               value: /tmp
             - name: XDG_CACHE_HOME

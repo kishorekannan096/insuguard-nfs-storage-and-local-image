@@ -48,7 +48,33 @@ Namespace: {{ .Release.Namespace }}
   oc get pods -l app.kubernetes.io/instance={{ .Release.Name }}
   oc logs -f deploy/{{ include "insurguard.fullname" . }}-claims-backend
 
+{{- if .Values.nvclip.airgappedTritonMode }}
+
+── ⚠ NV-CLIP airgapped adapter — verify before trusting fraud decisions ──
+
+  nvclip is running via airgappedTritonMode (default): tritonserver never
+  touches NGC, and an adapter sidecar re-exposes the NIM wrapper's
+  /v1/embeddings API on top of it. The adapter's tensor names/shapes/dtypes
+  are read live from Triton (not guessed); its image preprocessing constants
+  are the standard OpenCLIP ViT-H-14 convention, not confirmed against this
+  exact export. Run ./discover-airgap-info.sh <namespace> and read its
+  "Next steps" before relying on this for real duplicate/fraud decisions.
+  Logs: oc logs -f deploy/{{ include "insurguard.fullname" . }}-nvclip -c adapter
+{{- end }}
+
 ── Install Command Used ──────────────────────────────────────
 
+  # Fully air-gapped default — needs the real modelProfile UUIDs for the 3
+  # NGC-lookup NIMs (nvclip's adapter path needs no key at all). Get them
+  # with ./discover-airgap-info.sh <namespace> if you don't have them yet.
+  # (values-offline.yaml is unrelated — it's a failover image-registry
+  # overlay for when the in-cluster mirror is down, not an air-gap switch.)
   helm install {{ .Release.Name }} ./insureguard-openshift \
+    --set nemoretrieverParser.modelProfile=<uuid> \
+    --set llamaParser.modelProfile=<uuid> \
+    --set nemotronVlm.modelProfile=<uuid>
+
+  # Falls back to the NGC-authenticated path for everything instead:
+  helm install {{ .Release.Name }} ./insureguard-openshift \
+    --set nvclip.airgappedTritonMode=false \
     --set nvidiaApiKey=<YOUR_NGC_API_KEY>

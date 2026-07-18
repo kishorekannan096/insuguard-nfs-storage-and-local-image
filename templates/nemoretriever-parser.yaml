@@ -1,4 +1,7 @@
 {{- if .Values.nemoretrieverParser.enabled }}
+{{- if and (not .Values.nemoretrieverParser.modelProfile) (not .Values.nvidiaApiKey) }}
+{{ fail "nemoretriever-parser needs either nemoretrieverParser.modelProfile or nvidiaApiKey set. With neither, NIM_MODEL_PROFILE is omitted and the image falls back to its own NGC hub/org lookup (nimutils.download_models -> NGCClient().get_org_list()) at startup — on a truly air-gapped network that call can't even resolve, so the pod hangs/crash-loops instead of failing fast. Find the correct value for an already-cached model by inspecting the profile dir name under the NFS cache (see values.yaml comment and the discovery script), then --set nemoretrieverParser.modelProfile=<uuid>." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
