@@ -34,9 +34,17 @@ nimCache:
   nemotronVlm: 30Gi
   nvclip: 15Gi
 
-# NGC Docker Registry pull secret (for nvcr.io images)
+# NGC Docker Registry pull secret — only needed if you override a NIM image
+# field back to a raw nvcr.io/... path (default images now come from the
+# in-cluster mirror, no nvcr.io auth required). Leave disabled by default:
+# when enabled, the 4 NIM Deployments list this secret explicitly in
+# imagePullSecrets, which — per Kubernetes' ServiceAccount admission
+# controller — SUPPRESSES auto-attachment of the SA's own internal-registry
+# secret (it only auto-injects when a pod's imagePullSecrets list is empty).
+# Enabling this without actually needing nvcr.io access breaks pulls from
+# the internal registry.
 ngcImagePull:
-  enabled: true
+  enabled: false
   registry: nvcr.io
   username: "$oauthtoken"
   password: ""   

@@ -25,8 +25,10 @@ spec:
       {{- include "insurguard.gpuNodeSelector" . | nindent 6 }}
       securityContext:
         {{- include "insurguard.securityContext" . | nindent 8 }}
+      {{- if .Values.ngcImagePull.enabled }}
       imagePullSecrets:
         - name: {{ include "insurguard.imagePullSecretName" . }}
+      {{- end }}
       containers:
         - name: nemoretriever-parser
           image: {{ .Values.nemoretrieverParser.image }}
