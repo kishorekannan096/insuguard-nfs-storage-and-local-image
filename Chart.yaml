@@ -1,0 +1,6 @@
+apiVersion: v2
+name: insureguard-openshift
+description: InsureGuard - Insurance Claims & KYC Verification Platform (OpenShift)
+type: application
+version: 0.2.0
+appVersion: "1.0.0"

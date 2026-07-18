@@ -1,0 +1,22 @@
+# ============================================================================
+# ALWAYS-ON storage overlay — apply on EVERY deploy once the shared NFS
+# provisioner (../nfs-backup/) is installed.
+#
+# Puts the 4 NIM model-weight caches on NFS (your 1 TB box) instead of local
+# LVMS. The first online deploy downloads the weights straight onto the box;
+# every deploy after that — even after a full `helm uninstall` — finds them
+# already there and skips the nvcr.io pull entirely.
+#
+# Everything else (etcd, minio, milvus, postgres, jupyterlab — business data,
+# not model weights) stays on the cluster's local `storageClass` (lvms-vg1)
+# default; this overlay does not touch it.
+#
+# Usage:
+#   helm upgrade --install insurguard . -f values.yaml -f values-storage-nfs.yaml \
+#     --set ngcImagePull.password=<YOUR_NGC_KEY>
+#
+# Requires the shared "nfs-client" StorageClass from
+# ../nfs-backup/01-install-nfs-provisioner.sh to be installed first.
+# ============================================================================
+nimCache:
+  storageClassName: "nfs-client"

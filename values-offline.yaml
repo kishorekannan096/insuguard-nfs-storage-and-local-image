@@ -1,0 +1,31 @@
+# ============================================================================
+# INSURGUARD FAILOVER OVERLAY
+# Apply on top of values.yaml when the in-cluster mirror (nim-mirror namespace
+# in the OpenShift internal registry — the chart's default, see values.yaml)
+# is unavailable:
+#   helm upgrade insurguard . -f values.yaml -f values-offline.yaml \
+#     --set ngcImagePull.password=<YOUR_NGC_KEY>
+#
+# Repoints the 4 NIM images at the GitLab Container Registry on the 1 TB box
+# — a second, independent copy of the same images kept outside the cluster.
+# Registry = 198.18.134.23:5050, project = root/model-images (self-signed).
+#
+# NOTE: the 3 images mirrored from a :latest source tag (nemoretriever-parse,
+# nemotron-vlm, nvclip) are pinned here to the same immutable digest-backed
+# tag used by the in-cluster mirror (mirrored-20260717) — both copies are the
+# same digest, so switching between them mid-incident is safe.
+#
+# Custom-built images (face-embedding-api, kyc-verifier, etc.) are not
+# covered — see ./nfs-backup/mirror-images.sh to back those up separately.
+# ============================================================================
+nemoretrieverParser:
+  image: 198.18.134.23:5050/root/model-images/nemoretriever-parse:mirrored-20260717
+
+llamaParser:
+  image: 198.18.134.23:5050/root/model-images/llama-3.1-8b-instruct:1.8.5
+
+nemotronVlm:
+  image: 198.18.134.23:5050/root/model-images/llama-3.1-nemotron-nano-vl-8b-v1:mirrored-20260717
+
+nvclip:
+  image: 198.18.134.23:5050/root/model-images/nvclip:mirrored-20260717

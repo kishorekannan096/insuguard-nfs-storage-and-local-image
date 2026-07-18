@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "insurguard.fullname" . }}-claims-backend
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+    app.kubernetes.io/name: claims-backend
+spec:
+  replicas: {{ .Values.claimsBackend.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: claims-backend
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: claims-backend
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- include "insurguard.gpuNodeSelector" . | nindent 6 }}
+      securityContext:
+        {{- include "insurguard.securityContext" . | nindent 8 }}
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:15
+          securityContext:
+            {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
+          command:
+            - sh
+            - -c
+            - "until pg_isready -h {{ include "insurguard.fullname" . }}-postgres-0.{{ include "insurguard.fullname" . }}-postgres -p {{ .Values.postgres.port }}; do echo waiting for database; sleep 2; done;"
+      containers:
+        - name: claims-backend
+          image: {{ .Values.claimsBackend.image }}
+          securityContext:
+            {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
+          env:
+            # Database
+            - name: DATABASE_URL
+              value: {{ printf "postgresql+asyncpg://%s:%s@%s-postgres:%s/claims_db" .Values.postgres.user .Values.postgres.password (include "insurguard.fullname" .) (.Values.postgres.port | toString) | quote }}
+            # KYC Service
+            - name: KYC_VERIFIER_URL
+              value: {{ printf "http://%s-kyc-verifier:%s" (include "insurguard.fullname" .) (.Values.kycVerifier.port | toString) | quote }}
+            # AI Services
+            - name: HIVE_AI_URL
+              value: {{ printf "http://%s-hive-ai-detection:%s" (include "insurguard.fullname" .) (.Values.hiveAiDetection.port | toString) | quote }}
+            - name: NEMOTRON_VLM_URL
+              value: {{ printf "http://%s-nemotron-vlm:%s" (include "insurguard.fullname" .) (.Values.nemotronVlm.port | toString) | quote }}
+            - name: NVCLIP_URL
+              value: {{ printf "http://%s-nvclip:%s" (include "insurguard.fullname" .) (.Values.nvclip.port | toString) | quote }}
+            - name: LLM_DECISION_URL
+              value: {{ printf "http://%s-llama-parser:%s" (include "insurguard.fullname" .) (.Values.llamaParser.port | toString) | quote }}
+            # Milvus
+            - name: MILVUS_HOST
+              value: {{ printf "%s-milvus" (include "insurguard.fullname" .) | quote }}
+            - name: MILVUS_PORT
+              value: {{ .Values.milvus.port | quote }}
+            # MinIO
+            - name: MINIO_ENDPOINT
+              value: {{ printf "%s-minio:%s" (include "insurguard.fullname" .) (.Values.minio.apiPort | toString) | quote }}
+            - name: MINIO_ACCESS_KEY
+              value: {{ .Values.minio.accessKey | quote }}
+            - name: MINIO_SECRET_KEY
+              value: {{ .Values.minio.secretKey | quote }}
+            # Forgery Detection
+            - name: FORGERY_DETECTION_API_URL
+              value: {{ printf "http://%s-forgery-detection-api:%s" (include "insurguard.fullname" .) (.Values.forgeryDetectionApi.port | toString) | quote }}
+            # LLM Model
+            - name: LLM_MODEL
+              value: {{ .Values.llmModel | quote }}
+            {{- range $key, $val := .Values.claimsBackend.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+          ports:
+            - containerPort: {{ .Values.claimsBackend.port }}
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "insurguard.fullname" . }}-claims-backend
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.claimsBackend.port }}
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: claims-backend
+    app.kubernetes.io/instance: {{ .Release.Name }}

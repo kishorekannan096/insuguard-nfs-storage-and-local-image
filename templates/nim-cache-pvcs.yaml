@@ -1,0 +1,88 @@
+# ---------------------------------------------------------------------------
+# NIM Model Cache PVCs
+# One per NIM, giving each pod a persistent /opt/nim/.cache instead of the
+# emptyDir it used before — downloaded weights now survive pod restarts and
+# (when storageClassName points at an NFS-backed class, see
+# ../nfs-backup/values-storage-nfs.yaml) survive `helm uninstall` too, since
+# the weights live in the NFS export rather than in the PVC object itself.
+#
+# The nfs.io/storage-path annotation pins each PVC to a fixed subdirectory
+# name on the NFS export (understood by nfs-subdir-external-provisioner) so
+# deleting and recreating the PVC always rebinds to the same on-disk data —
+# no manual PV claimRef patching needed between deploy cycles.
+# ---------------------------------------------------------------------------
+{{- $sc := .Values.nimCache.storageClassName | default .Values.storageClass }}
+{{- if .Values.nemoretrieverParser.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insurguard.fullname" . }}-nim-cache-nemoretriever-parser
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+  annotations:
+    nfs.io/storage-path: "insurguard-nim-cache-nemoretriever-parser"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.nimCache.nemoretrieverParser }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insurguard.fullname" . }}-nim-cache-llama-parser
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+  annotations:
+    nfs.io/storage-path: "insurguard-nim-cache-llama-parser"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.nimCache.llamaParser }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insurguard.fullname" . }}-nim-cache-nemotron-vlm
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+  annotations:
+    nfs.io/storage-path: "insurguard-nim-cache-nemotron-vlm"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.nimCache.nemotronVlm }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insurguard.fullname" . }}-nim-cache-nvclip
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+  annotations:
+    nfs.io/storage-path: "insurguard-nim-cache-nvclip"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.nimCache.nvclip }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}

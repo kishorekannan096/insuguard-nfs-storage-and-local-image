@@ -1,0 +1,65 @@
+{{- if .Values.routes.claimsFrontend.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "insurguard.fullname" . }}-claims-frontend
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.routes.claimsFrontend.host }}
+  host: {{ .Values.routes.claimsFrontend.host }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "insurguard.fullname" . }}-claims-frontend
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+{{- end }}
+---
+{{- if .Values.routes.adminDashboard.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "insurguard.fullname" . }}-admin-dashboard
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.routes.adminDashboard.host }}
+  host: {{ .Values.routes.adminDashboard.host }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "insurguard.fullname" . }}-admin-dashboard
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+{{- end }}
+---
+{{- if .Values.routes.claimsBackend.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "insurguard.fullname" . }}-claims-backend
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.routes.claimsBackend.host }}
+  host: {{ .Values.routes.claimsBackend.host }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "insurguard.fullname" . }}-claims-backend
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+{{- end }}

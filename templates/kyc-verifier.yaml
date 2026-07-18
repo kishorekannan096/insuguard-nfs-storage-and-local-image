@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "insurguard.fullname" . }}-kyc-verifier-config
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+data:
+  config.py: |
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+    from typing import Optional
+
+    class Settings(BaseSettings):
+        # Service URLs
+        POSTGRES_URL: str
+        MILVUS_HOST: str
+        MILVUS_PORT: int = 19530
+        OCR_URL: str
+        OCR_MODEL: str = "nvidia/nemoretriever-parse"
+        LLM_URL: str
+        ANTISPOOF_URL: str
+        MINIO_ENDPOINT: str
+        MINIO_ACCESS_KEY: str
+        MINIO_SECRET_KEY: str
+
+        # Thresholds & Logic
+        VECTOR_DIM: int = 512
+        VERIFY_THRESHOLD: float = 0.75
+        REVIEW_THRESHOLD: float = 0.60
+        ANTISPOOF_CONFIDENCE_MIN: float = 0.90
+        MILVUS_TOPK: int = 5
+
+        # App Config
+        LOG_LEVEL: str = "INFO"
+        RETRY_COUNT: int = 2
+        REQUEST_TIMEOUT_SECONDS: int = 60
+
+        # model
+        LLM_MODEL: str = "meta/llama-3.1-8b-instruct"
+
+        model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    settings = Settings()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "insurguard.fullname" . }}-kyc-verifier
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+    app.kubernetes.io/name: kyc-verifier
+spec:
+  replicas: {{ .Values.kycVerifier.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kyc-verifier
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kyc-verifier
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- include "insurguard.gpuNodeSelector" . | nindent 6 }}
+      securityContext:
+        {{- include "insurguard.securityContext" . | nindent 8 }}
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:15
+          securityContext:
+            {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
+          command:
+            - sh
+            - -c
+            - "until pg_isready -h {{ include "insurguard.fullname" . }}-postgres-0.{{ include "insurguard.fullname" . }}-postgres -p {{ .Values.postgres.port }}; do echo waiting for database; sleep 2; done;"
+      containers:
+        - name: kyc-verifier
+          image: {{ .Values.kycVerifier.image }}
+          securityContext:
+            {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
+          env:
+            - name: POSTGRES_URL
+              value: {{ printf "postgresql+asyncpg://%s:%s@%s-postgres:%s/kyc_db" .Values.postgres.user .Values.postgres.password (include "insurguard.fullname" .) (.Values.postgres.port | toString) | quote }}
+            - name: MILVUS_HOST
+              value: {{ printf "%s-milvus" (include "insurguard.fullname" .) | quote }}
+            - name: MILVUS_PORT
+              value: {{ .Values.milvus.port | quote }}
+            - name: OCR_URL
+            {{- if .Values.nemoretrieverParser.enabled }}
+              value: {{ printf "http://%s-nemoretriever-parser:%s/v1/chat/completions" (include "insurguard.fullname" .) (.Values.nemoretrieverParser.port | toString) | quote }}
+            {{- else }}
+              value: {{ printf "http://%s-nemotron-vlm:%s/v1/chat/completions" (include "insurguard.fullname" .) (.Values.nemotronVlm.port | toString) | quote }}
+            {{- end }}
+            - name: OCR_MODEL
+            {{- if .Values.nemoretrieverParser.enabled }}
+              value: "nvidia/nemoretriever-parse"
+            {{- else }}
+              value: "nvidia/llama-3.1-nemotron-nano-vl-8b-v1"
+            {{- end }}
+            - name: LLM_URL
+              value: {{ printf "http://%s-llama-parser:%s/v1/chat/completions" (include "insurguard.fullname" .) (.Values.llamaParser.port | toString) | quote }}
+            - name: ANTISPOOF_URL
+              value: {{ printf "http://%s-face-embedding-api:%s/embed" (include "insurguard.fullname" .) (.Values.faceEmbeddingApi.port | toString) | quote }}
+            - name: MINIO_ENDPOINT
+              value: {{ printf "%s-minio:%s" (include "insurguard.fullname" .) (.Values.minio.apiPort | toString) | quote }}
+            - name: MINIO_ACCESS_KEY
+              value: {{ .Values.minio.accessKey | quote }}
+            - name: MINIO_SECRET_KEY
+              value: {{ .Values.minio.secretKey | quote }}
+            # LLM Model
+            - name: LLM_MODEL
+              value: {{ .Values.llmModel | quote }}
+            {{- range $key, $val := .Values.kycVerifier.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+          ports:
+            - containerPort: {{ .Values.kycVerifier.port }}
+              name: http
+          volumeMounts:
+            - name: config-override
+              mountPath: /app/src/config.py
+              subPath: config.py
+      volumes:
+        - name: config-override
+          configMap:
+            name: {{ include "insurguard.fullname" . }}-kyc-verifier-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "insurguard.fullname" . }}-kyc-verifier
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.kycVerifier.port }}
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: kyc-verifier
+    app.kubernetes.io/instance: {{ .Release.Name }}

@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "insurguard.fullname" . }}-nemotron-vlm
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+    app.kubernetes.io/name: nemotron-vlm
+spec:
+  replicas: {{ .Values.nemotronVlm.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nemotron-vlm
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nemotron-vlm
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        insurguard/gpu-workload: "true"
+        insurguard/nim-heavy: "true"
+    spec:
+      {{- include "insurguard.gpuTopologySpread" . | nindent 6 }}
+      {{- include "insurguard.nimAntiAffinity" (dict "component" "nemotron-vlm" "Release" .Release) | nindent 6 }}
+      {{- include "insurguard.gpuNodeSelector" . | nindent 6 }}
+      securityContext:
+        {{- include "insurguard.securityContext" . | nindent 8 }}
+      imagePullSecrets:
+        - name: {{ include "insurguard.imagePullSecretName" . }}
+      containers:
+        - name: nemotron-vlm
+          image: {{ .Values.nemotronVlm.image }}
+          securityContext:
+            {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
+          env:
+            - name: NGC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "insurguard.nvidiaSecretName" . }}
+                  key: NGC_API_KEY
+          ports:
+            - containerPort: {{ .Values.nemotronVlm.port }}
+              name: http
+          volumeMounts:
+            - name: nim-cache
+              mountPath: /opt/nim/.cache
+            - name: dshm
+              mountPath: /dev/shm
+          resources:
+            limits:
+              nvidia.com/gpu: {{ .Values.nemotronVlm.gpu | quote }}
+      volumes:
+        - name: nim-cache
+          persistentVolumeClaim:
+            claimName: {{ include "insurguard.fullname" . }}-nim-cache-nemotron-vlm
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Values.nemotronVlm.shmSize }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "insurguard.fullname" . }}-nemotron-vlm
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.nemotronVlm.port }}
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: nemotron-vlm
+    app.kubernetes.io/instance: {{ .Release.Name }}

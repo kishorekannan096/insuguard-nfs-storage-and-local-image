@@ -1,0 +1,29 @@
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Build artifacts
+node_modules/
+dist/
+build/
+*.log
+*.tar.gz
+*.zip
+
+# Python
+*.pyc
+*.pyo
+__pycache__/
+*.ipynb
+requirements.txt
+
+# Non-chart data directories
+id/
+
+# OS
+.DS_Store
+Thumbs.db

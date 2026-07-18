@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "insurguard.fullname" . }}-nvclip
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+    app.kubernetes.io/name: nvclip
+spec:
+  replicas: {{ .Values.nvclip.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nvclip
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nvclip
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        insurguard/gpu-workload: "true"
+    spec:
+      {{- include "insurguard.gpuTopologySpread" . | nindent 6 }}
+      {{- include "insurguard.gpuNodeSelector" . | nindent 6 }}
+      securityContext:
+        {{- include "insurguard.securityContext" . | nindent 8 }}
+      imagePullSecrets:
+        - name: {{ include "insurguard.imagePullSecretName" . }}
+      containers:
+        - name: nvclip
+          image: {{ .Values.nvclip.image }}
+          securityContext:
+            {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
+          env:
+            - name: NGC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "insurguard.nvidiaSecretName" . }}
+                  key: NGC_API_KEY
+          ports:
+            - containerPort: {{ .Values.nvclip.port }}
+              name: http
+          volumeMounts:
+            - name: nim-cache
+              mountPath: /opt/nim/.cache
+            - name: dshm
+              mountPath: /dev/shm
+          resources:
+            limits:
+              nvidia.com/gpu: {{ .Values.nvclip.gpu | quote }}
+      volumes:
+        - name: nim-cache
+          persistentVolumeClaim:
+            claimName: {{ include "insurguard.fullname" . }}-nim-cache-nvclip
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Values.nvclip.shmSize }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "insurguard.fullname" . }}-nvclip
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.nvclip.port }}
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: nvclip
+    app.kubernetes.io/instance: {{ .Release.Name }}

@@ -1,0 +1,243 @@
+
+nvidiaApiKey: ""
+
+# GPU node targeting — only the value changes between GPU pools
+# Override at install time with --set gpu.product=<value>
+#
+# L40S nodes (wn1, wn2):
+#   --set gpu.product=NVIDIA-L40S-SHARED
+#
+# RTX 6000 Blackwell node (c845):
+#   --set gpu.product=NVIDIA-RTX-PRO-6000-Blackwell-Server-Edition-SHARED
+gpu:
+  product: "NVIDIA-L40S-SHARED"
+
+# Storage class for all PersistentVolumeClaims
+# Leave empty ("") to use the cluster default storage class
+storageClass: "lvms-vg1"
+
+# ---------------------------------------------------------------------------
+# NIM model-weight caches (nemoretriever-parser, llama-parser, nemotron-vlm,
+# nvclip). Persisted so weights survive pod restarts instead of re-pulling
+# from nvcr.io every time (each pull is 15-40 min).
+#
+# storageClassName is empty by default -> falls back to the global
+# `storageClass` above (local LVMS). Point it at your NFS-backed class
+# (see ../nfs-backup/) with `-f values-storage-nfs.yaml` to make the cache
+# survive `helm uninstall` as well — the weights live in the NFS export, not
+# in the PVC, so a later `helm install` rebinds and finds them already there.
+# ---------------------------------------------------------------------------
+nimCache:
+  storageClassName: ""
+  nemoretrieverParser: 30Gi
+  llamaParser: 30Gi
+  nemotronVlm: 30Gi
+  nvclip: 15Gi
+
+# NGC Docker Registry pull secret (for nvcr.io images)
+ngcImagePull:
+  enabled: true
+  registry: nvcr.io
+  username: "$oauthtoken"
+  password: ""   
+  email: ""
+
+nameOverride: "insurguard"
+fullnameOverride: ""
+
+# OpenShift project / namespace
+namespace: ""
+
+# Global LLM model name
+llmModel: "meta/llama-3.1-8b-instruct"
+
+routes:
+  claimsFrontend:
+    enabled: true
+    host: ""   
+  adminDashboard:
+    enabled: true
+    host: ""
+  claimsBackend:
+    enabled: false
+    host: ""
+
+# 1. Face Embedding API
+faceEmbeddingApi:
+  image: image-registry.openshift-image-registry.svc:5000/insurguard/insurguard:face-embedding-api
+  replicas: 1
+  port: 8000
+  servicePort: 8090
+  env:
+    HOST: "0.0.0.0"
+    PORT: "8000"
+    LOG_LEVEL: info
+    WORKERS: "1"
+    MODEL_ROOT: /app/resources
+    DEEPFACE_HOME: /app/resources
+    ENABLE_ANTISPOOFING: "true"
+    ANTISPOOFING_MODEL_DIR: /app/resources/anti_spoof_models
+    DEVICE_ID: "0"
+
+# 2. NeMo Retriever Parser
+# NOTE: nemoretriever-parse does not support RTX 6000 Blackwell (TRT-LLM 0.16 lacks sm_100).
+# Set enabled: false on Blackwell — OCR_URL will fall back to nemotron-vlm automatically.
+nemoretrieverParser:
+  enabled: true
+  # In-cluster mirror (nim-mirror namespace). Original was tagged :latest —
+  # pinned to an immutable digest-backed tag when mirrored (2026-07-17) so
+  # this doesn't silently drift. See ./nfs-backup/README.md.
+  image: image-registry.openshift-image-registry.svc:5000/nim-mirror/nim-nvidia-nemoretriever-parse:mirrored-20260717
+  replicas: 1
+  port: 8000
+  servicePort: 8001
+  shmSize: "16Gi"
+  gpu: 1
+  env:
+    NIM_HTTP_API_PORT: "8000"
+    NIM_TRITON_LOG_VERBOSE: "1"
+    # Uncomment to disable TRT-LLM on Blackwell (uses fallback backend)
+    # NIM_DISABLE_TRTLLM: "1"
+
+# 3. Llama Parser (LLM)
+llamaParser:
+  image: image-registry.openshift-image-registry.svc:5000/nim-mirror/nim-meta-llama-3.1-8b-instruct:1.8.5
+  replicas: 1
+  port: 8000
+  servicePort: 8002
+  shmSize: "16Gi"
+  gpu: 1
+  env:
+    NIM_MAX_MODEL_LEN: "4096"
+
+# 4a. Etcd 
+etcd:
+  image: quay.io/coreos/etcd:v3.6.5
+  replicas: 1
+  pvcSize: 5Gi
+  env:
+    ETCD_AUTO_COMPACTION_MODE: revision
+    ETCD_AUTO_COMPACTION_RETENTION: "1000"
+    ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+    ETCD_SNAPSHOT_COUNT: "50000"
+
+# 4b. MinIO
+minio:
+  image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+  replicas: 1
+  apiPort: 9010
+  consolePort: 9011
+  pvcSize: 20Gi
+  accessKey: minioadmin
+  secretKey: minioadmin
+
+# 4c. Milvus
+milvus:
+  image: milvusdb/milvus:v2.6.2-gpu
+  replicas: 1
+  port: 19530
+  metricsPort: 9091
+  pvcSize: 20Gi
+  gpu: 1
+  gpuMemPoolSize: "2048;4096"
+
+# 5. PostgreSQL
+postgres:
+  image: postgres:15
+  replicas: 1
+  port: 5432
+  pvcSize: 10Gi
+  user: postgres
+  password: postgres_password
+  databases: "kyc_db,claims_db"
+
+# 6. KYC Verifier
+kycVerifier:
+  image: image-registry.openshift-image-registry.svc:5000/insurguard/insurguard:kyc-verifier-v1
+  replicas: 1
+  port: 8000
+  servicePort: 8095
+  env:
+    VECTOR_DIM: "512"
+    VERIFY_THRESHOLD: "15"
+    REVIEW_THRESHOLD: "5"
+    ANTISPOOF_CONFIDENCE_MIN: "0.8"
+
+# 7. Forgery Detection API
+forgeryDetectionApi:
+  image: image-registry.openshift-image-registry.svc:5000/insurguard/insurguard:forgery-detection-api
+  replicas: 1
+  port: 8000
+  servicePort: 8006
+  gpu: 1
+  env:
+    FORGERY_THRESHOLD: "0.7"
+    UPLOAD_DIR: "/tmp/uploads"
+
+# 7b. Hive AI Detection (AI-generated content detection)
+hiveAiDetection:
+  image: image-registry.openshift-image-registry.svc:5000/insurguard/insurguard:hive-ai-detection
+  replicas: 1
+  port: 8000
+  servicePort: 8070
+  gpu: 1
+  gpuProduct: "NVIDIA-L40S-SHARED"
+  env: {}
+
+# 8. Nemotron VLM
+nemotronVlm:
+  # In-cluster mirror. Original was tagged :latest — pinned to an immutable
+  # digest-backed tag when mirrored (2026-07-17). See ./nfs-backup/README.md.
+  image: image-registry.openshift-image-registry.svc:5000/nim-mirror/nim-nvidia-llama-3.1-nemotron-nano-vl-8b-v1:mirrored-20260717
+  replicas: 1
+  port: 8000
+  servicePort: 8004
+  shmSize: "16Gi"
+  gpu: 1
+
+# 9. NV-CLIP
+nvclip:
+  # In-cluster mirror. Original was tagged :latest — pinned to an immutable
+  # digest-backed tag when mirrored (2026-07-17). See ./nfs-backup/README.md.
+  image: image-registry.openshift-image-registry.svc:5000/nim-mirror/nim-nvidia-nvclip:mirrored-20260717
+  replicas: 1
+  port: 8000
+  servicePort: 8005
+  shmSize: "8Gi"
+  gpu: 1
+
+# 10. Claims Backend 
+claimsBackend:
+  image: image-registry.openshift-image-registry.svc:5000/insurguard/insurguard:claims-backend
+  replicas: 1
+  port: 8000
+  servicePort: 8100
+  env:
+    MILVUS_COLLECTION: vehicle_images
+    MINIO_BUCKET: claims-data
+    FORGERY_THRESHOLD: "0.7"
+    DUPLICATE_THRESHOLD: "0.95"
+    UPLOAD_DIR: /app/uploads
+
+# 11. Claims Frontend
+claimsFrontend:
+  image: image-registry.openshift-image-registry.svc:5000/insurguard/insurguard:claims-frontend
+  replicas: 1
+  port: 8080
+  servicePort: 3100
+
+# 12. Admin Dashboard 
+adminDashboard:
+  image: image-registry.openshift-image-registry.svc:5000/insurguard/insurguard:admin-dashboard
+  replicas: 1
+  port: 8080
+  servicePort: 3200
+
+# 13. JupyterLab (development / debugging)
+jupyterlab:
+  enabled: false
+  image: jupyter/base-notebook:latest
+  replicas: 1
+  port: 8888
+  servicePort: 8888
+  pvcSize: 5Gi
