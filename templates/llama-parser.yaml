@@ -54,6 +54,22 @@ spec:
           resources:
             limits:
               nvidia.com/gpu: {{ .Values.llamaParser.gpu | quote }}
+          readinessProbe:
+            httpGet:
+              path: /v1/health/ready
+              port: {{ .Values.llamaParser.port }}
+            initialDelaySeconds: 300
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /v1/health/live
+              port: {{ .Values.llamaParser.port }}
+            initialDelaySeconds: 300
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 30
       volumes:
         - name: nim-cache
           persistentVolumeClaim:

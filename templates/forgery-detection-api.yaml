@@ -57,6 +57,8 @@ spec:
               mountPath: /tmp
             - name: home-ubuntu
               mountPath: /home/ubuntu
+            - name: hf-cache
+              mountPath: /tmp/hf_cache
           resources:
             limits:
               nvidia.com/gpu: {{ .Values.forgeryDetectionApi.gpu | quote }}
@@ -65,6 +67,9 @@ spec:
           emptyDir: {}
         - name: home-ubuntu
           emptyDir: {}
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: {{ include "insurguard.fullname" . }}-hf-cache-forgery-detection-api
 ---
 apiVersion: v1
 kind: Service

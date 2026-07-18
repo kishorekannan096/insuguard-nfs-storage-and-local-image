@@ -34,6 +34,17 @@ nimCache:
   nemotronVlm: 30Gi
   nvclip: 15Gi
 
+# HuggingFace model-weight caches — forgeryDetectionApi and hiveAiDetection
+# download weights from huggingface.co at runtime (HF_HOME=/tmp/hf_cache),
+# a different upstream than the NIMs above (which pull from NGC/nvcr.io), so
+# this is tracked separately. Same rationale as nimCache: empty
+# storageClassName falls back to local `storageClass`; point it at NFS with
+# -f values-storage-nfs.yaml so the cache survives helm uninstall.
+hfCache:
+  storageClassName: ""
+  forgeryDetectionApi: 15Gi
+  hiveAiDetection: 15Gi
+
 # NGC Docker Registry pull secret — only needed if you override a NIM image
 # field back to a raw nvcr.io/... path (default images now come from the
 # in-cluster mirror, no nvcr.io auth required). Leave disabled by default:

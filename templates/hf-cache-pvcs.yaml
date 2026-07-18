@@ -1,0 +1,45 @@
+# ---------------------------------------------------------------------------
+# HuggingFace Model Cache PVCs
+# forgery-detection-api and hive-ai-detection set HF_HOME=/tmp/hf_cache and
+# download weights from huggingface.co at runtime — previously an emptyDir,
+# so every restart re-downloaded them. Same pattern as nim-cache-pvcs.yaml:
+# fixed nfs.io/storage-path annotation so delete/recreate of the PVC rebinds
+# to the same on-disk data (see ../../nfs-backup/README.md).
+# ---------------------------------------------------------------------------
+{{- $sc := .Values.hfCache.storageClassName | default .Values.storageClass }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insurguard.fullname" . }}-hf-cache-forgery-detection-api
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+  annotations:
+    nfs.io/storage-path: "insurguard-hf-cache-forgery-detection-api"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.hfCache.forgeryDetectionApi }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insurguard.fullname" . }}-hf-cache-hive-ai-detection
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+  annotations:
+    nfs.io/storage-path: "insurguard-hf-cache-hive-ai-detection"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.hfCache.hiveAiDetection }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}

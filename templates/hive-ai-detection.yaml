@@ -48,7 +48,8 @@ spec:
               nvidia.com/gpu: {{ .Values.hiveAiDetection.gpu | quote }}
       volumes:
         - name: hf-cache
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: {{ include "insurguard.fullname" . }}-hf-cache-hive-ai-detection
 ---
 apiVersion: v1
 kind: Service
