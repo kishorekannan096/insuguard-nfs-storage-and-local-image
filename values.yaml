@@ -129,6 +129,14 @@ nemoretrieverParser:
   servicePort: 8001
   shmSize: "16Gi"
   gpu: 1
+  # llamaParser/nemotronVlm below have a localModelPath option that
+  # genuinely avoids NGC (confirmed by reading nim_llm_sdk source — see
+  # llamaParser.localModelPath comment). NOT wired up here: this NIM
+  # (nemoretriever-parse) is Triton-based like nvclip's NIM-wrapper path,
+  # not nim_llm_sdk-based — unconfirmed whether the same NIM_MODEL_NAME
+  # trick applies until this image is actually inspected the way
+  # llama-parser's was (this component is currently disabled in the
+  # cluster this chart was developed against, so it hasn't been).
   # Explicit profile bypasses the NGC hub/org lookup NIM otherwise does at
   # startup (nimutils.download_models -> NGCClient().get_org_list()) even
   # when the model cache is already warm — that lookup requires a valid NGC
@@ -150,7 +158,18 @@ llamaParser:
   servicePort: 8002
   shmSize: "16Gi"
   gpu: 1
-  # See nemoretrieverParser.modelProfile above for what this does and why.
+  # RECOMMENDED for air-gap — see nemoretrieverParser.localModelPath above
+  # for the full explanation. For THIS component it's confirmed directly:
+  # read straight from nim_llm_sdk.hub.ngc_injector.inject_ngc_hub source
+  # inside this exact image (backend is nim_llm_sdk + vLLM 0.6.3, confirmed
+  # via `python3 -c 'import vllm'` inside a running pod of this image).
+  # Set to the absolute in-container snapshot path, e.g.:
+  #   /opt/nim/.cache/ngc/hub/models--nim--meta--llama-3.1-8b-instruct/snapshots/<rev>
+  # (find <rev> under insurguard-nim-cache-llama-parser on the NFS export).
+  # Takes priority over modelProfile below if both are set.
+  localModelPath: ""
+  # Older mechanism — still goes through manifest/NGC profile lookup even
+  # with a warm cache (see nemoretrieverParser.modelProfile comment).
   modelProfile: ""
   env:
     NIM_MAX_MODEL_LEN: "4096"
@@ -239,7 +258,18 @@ nemotronVlm:
   servicePort: 8004
   shmSize: "16Gi"
   gpu: 1
-  # See nemoretrieverParser.modelProfile above for what this does and why.
+  # RECOMMENDED for air-gap — see llamaParser.localModelPath above. Inferred
+  # (not independently confirmed by inspecting this image's own source) from
+  # this NIM's NFS cache using the identical nim_llm_sdk-style HF-hub layout
+  # (models--<org>--<model>/snapshots/<rev>) that llama-parser has, where it
+  # WAS confirmed directly. Verify against this image before trusting it in
+  # production, same caveat as the nvclip adapter. Set to the absolute
+  # in-container snapshot path, e.g.:
+  #   /opt/nim/.cache/ngc/hub/models--nim--nvidia--llama-3.1-nemotron-nano-vl-8b-v1/snapshots/<rev>
+  # Takes priority over modelProfile below if both are set.
+  localModelPath: ""
+  # Older mechanism — still goes through manifest/NGC profile lookup even
+  # with a warm cache (see nemoretrieverParser.modelProfile comment).
   modelProfile: ""
 
 # 9. NV-CLIP

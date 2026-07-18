@@ -1,5 +1,5 @@
-{{- if and (not .Values.nemotronVlm.modelProfile) (not .Values.nvidiaApiKey) }}
-{{ fail "nemotron-vlm needs either nemotronVlm.modelProfile or nvidiaApiKey set. With neither, NIM_MODEL_PROFILE is omitted and the image falls back to its own NGC hub/org lookup (nimutils.download_models -> NGCClient().get_org_list()) at startup — on a truly air-gapped network that call can't even resolve, so the pod hangs/crash-loops instead of failing fast. Find the correct value for an already-cached model by inspecting the profile dir name under the NFS cache (see values.yaml comment and the discovery script), then --set nemotronVlm.modelProfile=<uuid>." }}
+{{- if and (not .Values.nemotronVlm.localModelPath) (not .Values.nemotronVlm.modelProfile) (not .Values.nvidiaApiKey) }}
+{{ fail "nemotron-vlm needs nemotronVlm.localModelPath, nemotronVlm.modelProfile, or nvidiaApiKey set. With none of these, nim_llm_sdk.hub.ngc_injector.inject_ngc_hub (assumed shared with llama-parser — same nim_llm_sdk-style HF-hub cache layout observed under this NIM's NFS cache, though not independently confirmed by inspecting this specific image) falls through to its manifest/NGC profile-lookup path at startup — on a truly air-gapped network that call can't even resolve, so the pod hangs/crash-loops instead of failing fast. localModelPath is the recommended fix: set it to the absolute in-container path (under /opt/nim/.cache, matching your NFS-mounted nim-cache PVC) of an already-downloaded HF-format snapshot directory — inject_ngc_hub takes an early, NGC-free branch whenever NIM_MODEL_NAME resolves to an existing local directory. modelProfile (NIM_MODEL_PROFILE) is the older mechanism and still goes through manifest/NGC lookup." }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -37,7 +37,10 @@ spec:
           securityContext:
             {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
           env:
-            {{- if .Values.nemotronVlm.modelProfile }}
+            {{- if .Values.nemotronVlm.localModelPath }}
+            - name: NIM_MODEL_NAME
+              value: {{ .Values.nemotronVlm.localModelPath | quote }}
+            {{- else if .Values.nemotronVlm.modelProfile }}
             - name: NIM_MODEL_PROFILE
               value: {{ .Values.nemotronVlm.modelProfile | quote }}
             {{- end }}
