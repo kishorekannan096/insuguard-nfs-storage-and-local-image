@@ -68,6 +68,7 @@ spec:
   {{- if $sc }}
   storageClassName: {{ $sc | quote }}
   {{- end }}
+{{- if .Values.nvclip.enabled }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -86,3 +87,4 @@ spec:
   {{- if $sc }}
   storageClassName: {{ $sc | quote }}
   {{- end }}
+{{- end }}

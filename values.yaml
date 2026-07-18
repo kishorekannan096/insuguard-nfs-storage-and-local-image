@@ -239,7 +239,15 @@ nemotronVlm:
   modelProfile: ""
 
 # 9. NV-CLIP
+# Unlike llamaParser/nemotronVlm, this NIM's image unconditionally constructs
+# an NGCClient (which authenticates in its own __init__) as part of startup's
+# download_models() call — confirmed empirically that this happens BEFORE any
+# cache check or NIM_MODEL_PROFILE logic runs, so nvidiaApiKey is a hard
+# requirement here regardless of a warm NFS cache. The chart fails fast with
+# a clear error (see templates/nvclip.yaml) if nvidiaApiKey is unset while
+# nvclip.enabled is true, rather than a confusing crash loop.
 nvclip:
+  enabled: true
   # In-cluster mirror. Original was tagged :latest — pinned to an immutable
   # digest-backed tag when mirrored (2026-07-17). See ./nfs-backup/README.md.
   image: image-registry.openshift-image-registry.svc:5000/nim-mirror/nim-nvidia-nvclip:mirrored-20260717
@@ -247,13 +255,24 @@ nvclip:
   port: 8000
   servicePort: 8005
   shmSize: "8Gi"
-  # See nemoretrieverParser.modelProfile above for what this does and why.
-  # This exact value was read from a successful prior run's own logs
-  # ("Matched first profile_id in manifest: ..."), specific to the
-  # mirrored-20260717 image tag above — if that tag ever changes, re-check
-  # this against a fresh successful run's logs before trusting it.
+  # Left wired but confirmed ineffective for nvclip specifically (see note
+  # above) — harmless to leave set in case a future image build respects it.
   modelProfile: "afd81bb5-1b82-4816-a1bd-312dd380e4d1"
   gpu: 1
+  # ---------------------------------------------------------------------------
+  # OPT-IN true-air-gapped mode: skips the NIM Python wrapper (start_server)
+  # entirely and launches tritonserver directly against the already-cached
+  # Triton model repository on NFS — genuinely never touches NGC, unlike
+  # NIM_MODEL_PROFILE above. Trade-off: this also removes whatever HTTP API
+  # the NIM wrapper provided on top of raw Triton (base64 image handling,
+  # simplified request/response shape) — claims-backend calls nvclip via
+  # NVCLIP_URL and almost certainly expects that wrapper API, not Triton's
+  # native /v2/models/<name>/infer protocol. Untested against claims-backend;
+  # verify its actual image-matching flow still works before relying on this.
+  # tritonModelRepositoryPath is specific to the currently-cached profile
+  # (see modelProfile comment above) — re-check if the image tag changes.
+  airgappedTritonMode: false
+  tritonModelRepositoryPath: "/opt/nim/.cache/triton-model-repository/nvclip-vit-h-14_vgenericx1_0.0.3"
 
 # 10. Claims Backend 
 claimsBackend:

@@ -1,3 +1,7 @@
+{{- if .Values.nvclip.enabled }}
+{{- if and (not .Values.nvidiaApiKey) (not .Values.nvclip.airgappedTritonMode) }}
+{{ fail "nvclip requires nvidiaApiKey. Unlike the other NIMs in this chart, nvclip's image unconditionally authenticates to NGC (NGCClient().get_org_list()) as part of its startup download_models() call, before any cache check or NIM_MODEL_PROFILE logic runs — confirmed empirically, not fixable from this chart. Pass --set nvidiaApiKey=<key>, set --set nvclip.airgappedTritonMode=true to bypass the NIM wrapper entirely (see values.yaml comment for the trade-off), or --set nvclip.enabled=false if you don't need this component." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,6 +35,17 @@ spec:
           image: {{ .Values.nvclip.image }}
           securityContext:
             {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
+          {{- if .Values.nvclip.airgappedTritonMode }}
+          # Bypasses the NIM Python wrapper (start_server) entirely — launches
+          # tritonserver directly against the already-cached model repository.
+          # Never touches NGC. See values.yaml for the API-contract trade-off.
+          command: ["tritonserver"]
+          args:
+            - "--model-repository={{ .Values.nvclip.tritonModelRepositoryPath }}"
+            - "--http-port={{ .Values.nvclip.port }}"
+            - "--allow-grpc=true"
+            - "--allow-http=true"
+          {{- end }}
           env:
             {{- if .Values.nvclip.modelProfile }}
             - name: NIM_MODEL_PROFILE
@@ -56,7 +71,7 @@ spec:
               nvidia.com/gpu: {{ .Values.nvclip.gpu | quote }}
           readinessProbe:
             httpGet:
-              path: /v1/health/ready
+              path: {{ if .Values.nvclip.airgappedTritonMode }}/v2/health/ready{{ else }}/v1/health/ready{{ end }}
               port: {{ .Values.nvclip.port }}
             initialDelaySeconds: 300
             periodSeconds: 30
@@ -64,7 +79,7 @@ spec:
             failureThreshold: 30
           livenessProbe:
             httpGet:
-              path: /v1/health/live
+              path: {{ if .Values.nvclip.airgappedTritonMode }}/v2/health/live{{ else }}/v1/health/live{{ end }}
               port: {{ .Values.nvclip.port }}
             initialDelaySeconds: 300
             periodSeconds: 30
@@ -94,3 +109,4 @@ spec:
   selector:
     app.kubernetes.io/name: nvclip
     app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
