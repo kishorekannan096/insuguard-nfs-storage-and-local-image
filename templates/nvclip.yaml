@@ -32,6 +32,10 @@ spec:
           securityContext:
             {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
           env:
+            {{- if .Values.nvclip.modelProfile }}
+            - name: NIM_MODEL_PROFILE
+              value: {{ .Values.nvclip.modelProfile | quote }}
+            {{- end }}
             {{- if .Values.nvidiaApiKey }}
             - name: NGC_API_KEY
               valueFrom:

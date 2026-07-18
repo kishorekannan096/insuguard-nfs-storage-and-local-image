@@ -34,6 +34,10 @@ spec:
           securityContext:
             {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
           env:
+            {{- if .Values.nemotronVlm.modelProfile }}
+            - name: NIM_MODEL_PROFILE
+              value: {{ .Values.nemotronVlm.modelProfile | quote }}
+            {{- end }}
             {{- if .Values.nvidiaApiKey }}
             - name: NGC_API_KEY
               valueFrom:

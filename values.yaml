@@ -125,6 +125,13 @@ nemoretrieverParser:
   servicePort: 8001
   shmSize: "16Gi"
   gpu: 1
+  # Explicit profile bypasses the NGC hub/org lookup NIM otherwise does at
+  # startup (nimutils.download_models -> NGCClient().get_org_list()) even
+  # when the model cache is already warm — that lookup requires a valid NGC
+  # key regardless of cache state. Find the correct value for an already-
+  # cached model by inspecting the profile dir name under the NFS cache
+  # (see ../nfs-backup/README.md). Leave empty to require nvidiaApiKey.
+  modelProfile: ""
   env:
     NIM_HTTP_API_PORT: "8000"
     NIM_TRITON_LOG_VERBOSE: "1"
@@ -139,6 +146,8 @@ llamaParser:
   servicePort: 8002
   shmSize: "16Gi"
   gpu: 1
+  # See nemoretrieverParser.modelProfile above for what this does and why.
+  modelProfile: ""
   env:
     NIM_MAX_MODEL_LEN: "4096"
 
@@ -226,6 +235,8 @@ nemotronVlm:
   servicePort: 8004
   shmSize: "16Gi"
   gpu: 1
+  # See nemoretrieverParser.modelProfile above for what this does and why.
+  modelProfile: ""
 
 # 9. NV-CLIP
 nvclip:
@@ -236,6 +247,12 @@ nvclip:
   port: 8000
   servicePort: 8005
   shmSize: "8Gi"
+  # See nemoretrieverParser.modelProfile above for what this does and why.
+  # This exact value was read from a successful prior run's own logs
+  # ("Matched first profile_id in manifest: ..."), specific to the
+  # mirrored-20260717 image tag above — if that tag ever changes, re-check
+  # this against a fresh successful run's logs before trusting it.
+  modelProfile: "afd81bb5-1b82-4816-a1bd-312dd380e4d1"
   gpu: 1
 
 # 10. Claims Backend 

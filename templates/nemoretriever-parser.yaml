@@ -39,6 +39,10 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end }}
+            {{- if .Values.nemoretrieverParser.modelProfile }}
+            - name: NIM_MODEL_PROFILE
+              value: {{ .Values.nemoretrieverParser.modelProfile | quote }}
+            {{- end }}
             {{- if .Values.nvidiaApiKey }}
             - name: NVIDIA_API_KEY
               valueFrom:
