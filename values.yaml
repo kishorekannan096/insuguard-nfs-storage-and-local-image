@@ -45,6 +45,19 @@ hfCache:
   forgeryDetectionApi: 15Gi
   hiveAiDetection: 15Gi
 
+# Model-weight cache for face-embedding-api (DeepFace + anti-spoofing
+# models under MODEL_ROOT/DEEPFACE_HOME=/app/resources). Unlike nimCache/
+# hfCache, we don't know whether this image bakes its models in at build
+# time or downloads them from GitHub on first use — so the PVC is seeded by
+# an initContainer that copies whatever's already at /app/resources in the
+# image (if anything) into the cache on first run, then the app mounts the
+# (now-seeded) cache directly. Safe either way: if nothing was baked in, the
+# copy is a no-op and the app's own download-on-missing logic populates the
+# persistent cache instead.
+modelCache:
+  storageClassName: ""
+  faceEmbeddingApi: 5Gi
+
 # NGC Docker Registry pull secret — only needed if you override a NIM image
 # field back to a raw nvcr.io/... path (default images now come from the
 # in-cluster mirror, no nvcr.io auth required). Leave disabled by default:

@@ -20,6 +20,25 @@ spec:
       {{- include "insurguard.gpuNodeSelector" . | nindent 6 }}
       securityContext:
         {{- include "insurguard.securityContext" . | nindent 8 }}
+      initContainers:
+        - name: seed-model-cache
+          image: {{ .Values.faceEmbeddingApi.image }}
+          securityContext:
+            {{- include "insurguard.containerSecurityContext" . | nindent 12 }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              if [ -z "$(ls -A /cache 2>/dev/null)" ]; then
+                echo "model-cache empty — seeding from image (if anything is baked in)..."
+                cp -a /app/resources/. /cache/ 2>/dev/null || true
+                echo "seed complete: $(ls -A /cache 2>/dev/null | wc -l) entries copied"
+              else
+                echo "model-cache already populated — skipping seed"
+              fi
+          volumeMounts:
+            - name: model-cache
+              mountPath: /cache
       containers:
         - name: face-embedding-api
           image: {{ .Values.faceEmbeddingApi.image }}
@@ -33,6 +52,9 @@ spec:
           ports:
             - containerPort: {{ .Values.faceEmbeddingApi.port }}
               name: http
+          volumeMounts:
+            - name: model-cache
+              mountPath: /app/resources
           livenessProbe:
             httpGet:
               path: /health
@@ -47,6 +69,10 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 30
             timeoutSeconds: 10
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: {{ include "insurguard.fullname" . }}-model-cache-face-embedding-api
 ---
 apiVersion: v1
 kind: Service

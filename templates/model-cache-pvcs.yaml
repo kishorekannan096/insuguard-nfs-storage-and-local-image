@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# Generic model-weight cache PVCs — for components where we don't know in
+# advance whether the image bakes its model in or downloads it at runtime.
+# Paired with an initContainer (see face-embedding-api.yaml) that seeds the
+# PVC from the image on first run, so this is safe regardless of which case
+# it turns out to be.
+# ---------------------------------------------------------------------------
+{{- $sc := .Values.modelCache.storageClassName | default .Values.storageClass }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "insurguard.fullname" . }}-model-cache-face-embedding-api
+  labels:
+    {{- include "insurguard.labels" . | nindent 4 }}
+  annotations:
+    nfs.io/storage-path: "insurguard-model-cache-face-embedding-api"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.modelCache.faceEmbeddingApi }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}

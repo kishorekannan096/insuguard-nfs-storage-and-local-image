@@ -24,3 +24,5 @@ nimCache:
   storageClassName: "nfs-client"
 hfCache:
   storageClassName: "nfs-client"
+modelCache:
+  storageClassName: "nfs-client"
