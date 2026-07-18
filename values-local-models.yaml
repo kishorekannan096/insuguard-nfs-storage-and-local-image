@@ -1,0 +1,33 @@
+# ============================================================================
+# Cluster-specific overlay: pins llama-parser/nemotron-vlm to their already-
+# downloaded local snapshot directories, taking the NGC-free branch of
+# nim_llm_sdk.hub.ngc_injector.inject_ngc_hub (see values.yaml comments on
+# llamaParser.localModelPath / nemotronVlm.localModelPath for the full
+# explanation and source reference).
+#
+# Deliberately a values FILE, not `--set` on the command line: Git Bash/MSYS
+# on Windows silently rewrites POSIX-looking `--set foo=/opt/nim/...`
+# arguments into Windows paths (e.g. "/opt/nim/..." became
+# "C:/Program Files/Git/opt/nim/...") before they ever reach helm, which
+# silently breaks the NGC-free branch without any error — it just falls
+# through to the (also-working-so-far, but unproven-safe) manifest lookup
+# path instead. File contents aren't touched by that path-conversion
+# behavior, so this sidesteps the bug entirely regardless of which shell
+# it's applied from.
+#
+# The exact snapshot revision hash in each path is specific to what's
+# currently on the NFS export (see discover-nfs-direct.sh) — re-run that
+# and update this file if the cache is ever repopulated with a different
+# revision (e.g. after a model version bump).
+#
+# Usage:
+#   helm upgrade --install insurguard . \
+#     -f values.yaml -f values-storage-nfs.yaml -f values-local-models.yaml \
+#     --set gpu.product=<...> --set nemoretrieverParser.enabled=false \
+#     --set nvclip.airgappedTritonMode=true -n insurguard
+# ============================================================================
+llamaParser:
+  localModelPath: /opt/nim/.cache/ngc/hub/models--nim--meta--llama-3.1-8b-instruct/snapshots/hf-8c22764-nim1.3b
+
+nemotronVlm:
+  localModelPath: /opt/nim/.cache/ngc/hub/models--nim--nvidia--llama-3.1-nemotron-nano-vl-8b-v1/snapshots/8dd8d15-minimal

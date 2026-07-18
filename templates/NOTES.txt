@@ -64,17 +64,11 @@ Namespace: {{ .Release.Namespace }}
 
 ── Install Command Used ──────────────────────────────────────
 
-  # Fully air-gapped default — needs the real modelProfile UUIDs for the 3
-  # NGC-lookup NIMs (nvclip's adapter path needs no key at all). Get them
-  # with ./discover-airgap-info.sh <namespace> if you don't have them yet.
-  # (values-offline.yaml is unrelated — it's a failover image-registry
-  # overlay for when the in-cluster mirror is down, not an air-gap switch.)
-  helm install {{ .Release.Name }} ./insureguard-openshift \
-    --set nemoretrieverParser.modelProfile=<uuid> \
-    --set llamaParser.modelProfile=<uuid> \
-    --set nemotronVlm.modelProfile=<uuid>
-
-  # Falls back to the NGC-authenticated path for everything instead:
-  helm install {{ .Release.Name }} ./insureguard-openshift \
-    --set nvclip.airgappedTritonMode=false \
-    --set nvidiaApiKey=<YOUR_NGC_API_KEY>
+  helm upgrade --install {{ .Release.Name }} . \
+    -f values.yaml -f values-storage-nfs.yaml \
+    --set gpu.product={{ .Values.gpu.product }} \
+    --set nemoretrieverParser.enabled=false \
+    --set nvclip.airgappedTritonMode=true \
+    --set llamaParser.localModelPath=<path> \
+    --set nemotronVlm.localModelPath=<path> \
+    -n {{ .Release.Namespace }}
